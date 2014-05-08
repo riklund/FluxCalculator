@@ -1,0 +1,6 @@
+[submodule "RLlib"]
+	path = RLlib
+	url = https://github.com/riklund/RLlib.git
+[submodule "test/RLtest"]
+	path = test/RLtest
+	url = https://github.com/riklund/RLtest.git

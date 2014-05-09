@@ -17,5 +17,5 @@ int TestClassTest::RunTests() const
 
 string TestClassTest::ToString() const
 {
-  return "TestClass (dummy test, replace this name.)";
+  return "Dummy test.";
 }

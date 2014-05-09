@@ -86,25 +86,47 @@ void LoadIndata(const DensityConfig & myConfiguration, VerbosePrinter & myPrinte
 	{
 	  LoadFileToVector(myConfiguration.GetInputFiles().KCurveParticle.at(i).c_str(), myPrinter, KCurve[i]);
 	  LoadFileToVector(myConfiguration.GetInputFiles().GLWeightsParticle.at(i).c_str(), myPrinter, GLWeights[i]);
-	  LoadFileToVector(myConfiguration.GetInputFiles().EigendataParticle.at(i).c_str(), myPrinter, Eigendata[i]);
+	  LoadEigenInfo(myConfiguration.GetInputFiles().EigendataParticle.at(i).c_str(), myPrinter, Eigendata[i]);
 	}
-
-  LoadFileToVector(myConfiguration.GetInputFiles(). EigendataTwoParticles.c_str(), myPrinter, EigendataTwoParticle);
-
+  vector<vector<ComplexDouble> > tempEigenTwo;
+  LoadEigenInfo(myConfiguration.GetInputFiles(). EigendataTwoParticles.c_str(), myPrinter, tempEigenTwo);
+  if(tempEigenTwo.size() != 1)
+	{
+	  throw RLException("Found %d two-particle eigenvectors, one expected.", tempEigenTwo.size());
+	}
+  EigendataTwoParticle = tempEigenTwo.at(0);
 
 
   //Assert stuff.
   if(KCurve[0].size() != KCurve[1].size())
 	throw RLException("Unexpected difference in single-particle basis size: KCurve ");
   if(GLWeights[0].size() != GLWeights[1].size())
-	throw RLException("Unexpected difference in single-particle basis size: GLWeights ");
+	throw RLException("Unexpected difference in single-particle basis size: GLWeights (%d vs %d).", GLWeights[0].size(), GLWeights[1].size());
   if(Eigendata[0].size() != Eigendata[1].size())
 	throw RLException("Unexpected difference in single-particle basis size: Eigendata");
-  if(KCurve[0].size() + 1 != Eigendata[0].size())
-	throw RLException("Unexpected difference between eigendata and KCurve size.");
+  if(KCurve[0].size() * 2 != Eigendata[0].size())
+	throw RLException("Unexpected difference between eigendata (%d) and KCurve (%d) size.", Eigendata[0].size(), KCurve[0].size());
   if(KCurve[0].size() != GLWeights[0].size())
 	throw RLException("Unexpected difference between KCurve and GLWeights size.");
+  if((Eigendata[0].size())*(Eigendata[1].size()) != EigendataTwoParticle.size()-1)
+	throw RLException("Size mismatch: single particle %d, two-particle %d", Eigendata[0].size(), EigendataTwoParticle.size());
 
+  myPrinter.Print(2, "Done loading data.\n");
+}
+
+void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<ComplexDouble> & output)
+{
+  myPrinter.Print(3,"Loading file '%s'...", fileName.c_str());
+
+  output.clear();
+  ifstream fin(fileName.c_str(), fstream::in);
+  double re, im;
+  while(fin >> re >> im)
+	{
+	  output.push_back(ComplexDouble(re, im));
+	}
+
+  myPrinter.Print(3,"done.\n");
 }
 
 
@@ -114,26 +136,46 @@ void FillUnits(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter
   massOverLambda2 = myConfiguration.GetUnits().massOverLambda2;
 }
 
-void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<ComplexDouble> & output)
+void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<ComplexDouble> > & output)
 {
-  myPrinter.Print(3,"Loading file %s...", fileName.c_str());
-  FILE * infile = fopen(fileName.c_str(), "r");
-  if(infile == NULL)
+  myPrinter.Print(3,"Loading file '%s'...", fileName.c_str());
+  output.clear();
+  
+  ifstream fin(fileName.c_str(), fstream::in);
+  if(!fin.good())
 	{
-	  throw RLException("Could not open input file '%s'.",fileName.c_str());
+	  throw RLException("Failure on opening file '%s'.", fileName.c_str());
 	}
-  double re, im;
-  while(fscanf(infile, "%lf %lf\n", &re, &im) != EOF)
+
+  string current;
+
+  while(!(getline(fin, current).eof()))
 	{
-	  output.push_back(ComplexDouble(re, im));
+	  if(current.find("#")!=string::npos)
+		continue;
+	  output.push_back(vector<ComplexDouble>());
+	  stringstream mystream(current);
+	  double re, im;
+	  while(mystream >> re >> im)
+		output.back().push_back(ComplexDouble(re, im));
 	}
-  fclose(infile);
+
+  for(size_t i = 1; i<output.size(); ++i)
+	{
+	  if(output.at(i).size() != output.at(i-1).size())
+		{
+		  throw RLException("Read dimension mismatch.");
+		}
+	}
+  
   myPrinter.Print(3,"done.\n");
 }
 
 void FillPsiTwoCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 {
+  myPrinter.Print(3, "Filling PsiTwoCache...");
   psiTwoCache.resize(xGLRules.at(0).size(), vector<vector<ComplexDouble> >(xGLRules.at(1).size(), vector<ComplexDouble>(tValues.size(), 0.0)));
+
   for(size_t xa = 0; xa<xGLRules.at(0).size(); ++xa)
 	{
 #pragma omp parallel for
@@ -145,21 +187,20 @@ void FillPsiTwoCache(const DensityConfig & myConfiguration, VerbosePrinter & myP
 			}
 		}
 	}
+  myPrinter.Print(3, "done.\n");
 }
 
 void Fill3DGrid(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 {
+  myPrinter.Print(3, "Filling 3D grid...");
+  #pragma omp parallel for
   for(uint i = 0; i<2; ++i)
 	{
 	  double start = myConfiguration.GetParticleDomain().at(i).start;
 	  double stop = myConfiguration.GetParticleDomain().at(i).stop;
 	  size_t precision = myConfiguration.GetParticleDomain().at(i).precision;
 
-	  ///Construct GL rule.
-	  for(size_t j = 0; j<precision; ++j)
-		{
-		  xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
-		}
+	  xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
 	}
 
   double start = myConfiguration.GetTimeDomain().start;
@@ -167,14 +208,17 @@ void Fill3DGrid(const DensityConfig & myConfiguration, VerbosePrinter & myPrinte
   size_t precision = myConfiguration.GetTimeDomain().precision;
   tValues.resize(precision);
   double delta = (stop - start) / precision;
+  #pragma omp parallel for
   for(size_t i = 0; i<precision; ++i)
 	{
 	  tValues.at(i) = start + delta * i;
 	}
+  myPrinter.Print(3, "done.\n");
 }
-						
+
 void FillPsiSingleCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 {
+  myPrinter.Print(3, "Filling PsiSingleCache...");
   psiSingleCache.resize(2);
   for(uint i = 0; i<2; ++i)
 	psiSingleCache.at(i).resize(xGLRules.at(i).size(), vector<vector<ComplexDouble> >(tValues.size(), vector<ComplexDouble>(Eigendata.at(i).size(), 0) ) );
@@ -194,6 +238,7 @@ void FillPsiSingleCache(const DensityConfig & myConfiguration, VerbosePrinter & 
 			}
 		}
 	}
+  myPrinter.Print(3, "done\n");
 }
 
 
@@ -210,11 +255,12 @@ ComplexDouble PsiSingle(uint partIndex, size_t x, size_t t, size_t eigIndex)
 	  double XX = xGLRules.at(partIndex).at(x).first;
 
 	  toReturn += 
-		Eigendata.at(partIndex).at(i+1) *
-		sqrt(GLWeights.at(partIndex).at(i)) *
+		Eigendata.at(partIndex).at(eigIndex).at(i+1) *
+		sqrt(GLWeights.at(partIndex).at(i/2)) *
 		sqrt(1/PI) * 
-		bfun.at(i%2)(KCurve.at(partIndex).at(i) * XX) *
-		exp(ComplexDouble(0,-1.0)*KToE(KCurve.at(partIndex).at(i)) * tValues.at(t) / hbarTimesLambda);
+		bfun.at(i%2)(KCurve.at(partIndex).at(i/2) * XX) *
+		exp(ComplexDouble(0,-1.0)*KToE(KCurve.at(partIndex).at(i/2)) * 
+			tValues.at(t) / hbarTimesLambda);
 	}
   return toReturn;
 }
@@ -223,7 +269,7 @@ ComplexDouble KToE(ComplexDouble k)
 {
   return pow(hbarTimesLambda*k,2)/(2*massOverLambda2);
 }
- 
+
 ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t)
 {
   ComplexDouble toReturn = 0.0;
@@ -234,7 +280,7 @@ ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t)
 	{
 	  size_t a = i / N1;
 	  size_t b = i % N2;
-	  toReturn += psiSingleCache[0][xa][t][a] * psiSingleCache[1][xb][t][b];
+	  toReturn += EigendataTwoParticle[i] * psiSingleCache[0][xa][t][a] * psiSingleCache[1][xb][t][b];
 	}
   return toReturn;
 }
@@ -243,6 +289,7 @@ ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t)
 
 void FillRhoT(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 {
+  myPrinter.Print(3, "Filling RhoT...");
   rhoT.resize(tValues.size(), 0.0);
   for(size_t t = 0; t<tValues.size(); ++t)
 	{
@@ -257,6 +304,7 @@ void FillRhoT(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 			}
 		}
 	}
+  myPrinter.Print(3, "done.\n");
 }
 
 
@@ -264,6 +312,12 @@ void FillRhoT(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 void SaveRhoTToFile(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
 {
   string fileName = myConfiguration.GetOutputFiles().TimeSeries;
+  if(fileName.empty())
+	{
+	  myPrinter.Print(3, "Empty RhoT filename, not saving.");
+	  return;
+	}
+  myPrinter.Print(3, "Saving RhoT to file...");
   FILE * fout = fopen(fileName.c_str(), "w");
   if(fout == NULL)
 	{
@@ -273,6 +327,6 @@ void SaveRhoTToFile(const DensityConfig & myConfiguration, VerbosePrinter & myPr
 	{
 	  fprintf(fout, "%+13.10e %+13.10e\n", tValues.at(i), rhoT.at(i));
 	}
-  
   fclose(fout);
+  myPrinter.Print(3, "done.\n");
 }

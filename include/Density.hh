@@ -9,6 +9,7 @@
 #include <cmath>
 #include <unistd.h>
 #include <algorithm>
+#include <fstream>
 
 #include "DensityConfig.hh"
 #include "CommandLineInterpreter.hh"
@@ -27,6 +28,7 @@ int main(int argc,
 		 );
 
 
+
 CommandLineInterpreter * InitInterpreter();///Returns a command line interpreter with defined commands.
 
 
@@ -39,6 +41,9 @@ ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t);
 void LoadIndata(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
 
 void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<ComplexDouble> & output);
+
+void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<ComplexDouble> > & output);
+
 
 void FillUnits(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
 
@@ -74,14 +79,17 @@ vector<vector<ComplexDouble> > GLWeights(2);
 //first element in any eigendata is eigenvalue, rest is eigenvector.
 //for each single particle (outermost vector), we have N eigenvectors (middle vector)
 //containing N elements each. First element in innermost vector is eigenvalue, though.
-vector<vector<ComplexDouble> > Eigendata(2);
+vector<vector<vector<ComplexDouble> > > Eigendata(2);
+
+
+vector<ComplexDouble> EigendataTwoParticle;
+
 
 vector<double> rhoT;
 double hbarTimesLambda = 0, massOverLambda2 = 0;
 
 //For two particles, we only have one eigenvector: the one of the resonance.
 //First element is eigenvalue, rest is eigenvector.
-vector<ComplexDouble> EigendataTwoParticle;
 
 ///From outer to inner:
 /// Particle ID

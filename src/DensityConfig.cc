@@ -128,11 +128,11 @@ void DensityConfig::InitDomainSpecifics(Setting & root)
 	  throw RLException("Could not look up time stop.");
 	SizetLookup(partA, "Precision", particleDomain.at(0).precision);
 
-	if(! partB.lookupValue("Start", particleDomain.at(0).start) )
+	if(! partB.lookupValue("Start", particleDomain.at(1).start) )
 	  throw RLException("Could not look up time start.");
-	if(! partB.lookupValue("Stop", particleDomain.at(0).stop))
+	if(! partB.lookupValue("Stop", particleDomain.at(1).stop))
 	  throw RLException("Could not look up time stop.");
-	SizetLookup(partB, "Precision", particleDomain.at(0).precision);
+	SizetLookup(partB, "Precision", particleDomain.at(1).precision);
 
 	
 }

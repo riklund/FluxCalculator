@@ -1,5 +1,5 @@
-#ifndef Compute_hh
-#define Compute_hh 1
+#ifndef Density_hh
+#define Density_hh 1
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,12 +10,15 @@
 #include <unistd.h>
 #include <algorithm>
 #include <fstream>
+#include <functional>
 
 #include "DensityConfig.hh"
 #include "CommandLineInterpreter.hh"
 #include "VerbosePrinter.hh"
 #include "RLMacros.hpp"
 #include "LegendreRule.hh"
+#include "ManagedOutputFiles.hh"
+
 
 using namespace std;
 
@@ -23,83 +26,92 @@ using namespace std;
 #define TMP_LIST_STR(n, s) list<string> n; n.push_back(s);
 
 
+
 int main(int argc, 
 		 char *argv[]
 		 );
 
-
-
 CommandLineInterpreter * InitInterpreter();///Returns a command line interpreter with defined commands.
 
 
-void PerformCalculations(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
+void PerformCalculations(const DensityConfig & myConfiguration, 
+						 VerbosePrinter & myPrinter
+						 );
 
-ComplexDouble PsiSingle(uint partIndex, size_t x, size_t t, size_t eigIndex);
+void InitXGLRules(const vector<DomainSpecific> & particleDomain, 
+				  vector<vector<pair<double, double> > > & xGLRules
+				  );
 
-ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t);
+double ComputeSingleParticleRho(const vector<pair<double, double> > & xGLRule, 
+								const vector<ComplexDouble> & singleParticleWF
+								);
 
-void LoadIndata(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
+void LoadIndata(const DensityConfig & myConfiguration, 
+				VerbosePrinter & myPrinter, 
+				vector<vector<ComplexDouble> > & KCurve, 
+				vector<vector<ComplexDouble> > & GLWeights, 
+				vector<vector<vector<ComplexDouble> > > &Eigendata, 
+				vector<ComplexDouble> & EigendataTwoParticle
+				);
 
-void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<ComplexDouble> & output);
+void LoadFileToVector(string fileName, 
+					  VerbosePrinter & myPrinter, 
+					  vector<ComplexDouble> & output
+					  );
 
-void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<ComplexDouble> > & output);
+void LoadEigenInfo(string fileName, 
+				   VerbosePrinter & myPrinter, 
+				   vector<vector<ComplexDouble> > & output
+				   );
 
+void FillTwoParticleWF(const vector<vector<vector<ComplexDouble > > > & singleParticleWF, 
+					   const vector<ComplexDouble> & EigendataTwoParticle,
+					   vector<vector<ComplexDouble> > & twoParticleWF
+					   );
 
-void FillUnits(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
+ComplexDouble TwoParticleWF(size_t xa, 
+							size_t xb, 
+							const vector<vector<vector<ComplexDouble> > > & singleParticleWF,
+							const vector<ComplexDouble> & EigendataTwoParticle
+							);
 
-void FillPsiTwoCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
-
-void Fill3DGrid(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
-
-void FillPsiSingleCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
-
-ComplexDouble PsiSingle(uint partIndex, size_t x, size_t t, size_t eigIndex);
-
-ComplexDouble KToE(ComplexDouble k);
-
-ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t);
-
-void FillRhoT(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
-
-void SaveRhoTToFile(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter);
-
-///Global variables: used for calculations.
-
-//This is our 3D grid.
-//We need to integrate over the x:es
-vector<vector<pair<double, double> > > xGLRules(2);
-//but not over the t:s
-vector<double> tValues;
-
-
-//Basic stuff: curve and weights (needed for renormalization).
-vector<vector<ComplexDouble> > KCurve(2);
-vector<vector<ComplexDouble> > GLWeights(2);
-
-//first element in any eigendata is eigenvalue, rest is eigenvector.
-//for each single particle (outermost vector), we have N eigenvectors (middle vector)
-//containing N elements each. First element in innermost vector is eigenvalue, though.
-vector<vector<vector<ComplexDouble> > > Eigendata(2);
-
-
-vector<ComplexDouble> EigendataTwoParticle;
+void FillSingleParticleSpatial(const vector<vector<pair<double, double> > > & xGLRules, 
+							   const vector<vector<ComplexDouble> > & KCurve, 
+							   const vector<vector<ComplexDouble> > & GLWeights, 
+							   const vector<vector<vector<ComplexDouble> > > & Eigendata, 
+							   vector<vector<vector<ComplexDouble> > > & singleParticleSpatialWF
+							   );
 
 
-vector<double> rhoT;
-double hbarTimesLambda = 0, massOverLambda2 = 0;
+ComplexDouble SingleParticleSpatial(const vector<ComplexDouble> & KCurve, 
+									const vector<ComplexDouble> GLWeights, 
+									const vector<ComplexDouble> & Eigendata, 
+									const double x
+									);
 
-//For two particles, we only have one eigenvector: the one of the resonance.
-//First element is eigenvalue, rest is eigenvector.
+void FillSingleParticleTwiddle(const vector<vector<vector<ComplexDouble> > > & Eigendata, 
+							   const double timestep, 
+							   const double hbar,
+							   vector<vector<ComplexDouble> > & singleParticleTwiddleFactors
+							   );
 
-///From outer to inner:
-/// Particle ID
-/// arg 1
-/// arg 2 
-/// arg 3
-vector<vector<vector<vector<ComplexDouble> > > > psiSingleCache;
+ComplexDouble PsiSingleTwiddle(ComplexDouble eigenvalue, 
+							   double timestep, 
+							   double hbar
+							   );
 
-///From outer to inner:
-///arg 1, arg 2, arg 3
-vector<vector<vector<ComplexDouble> > > psiTwoCache;
+double ComputeTwoParticleRho(const vector<vector<pair<double, double> > > & xGLRules, 
+						   const vector<vector<ComplexDouble> > twoParticleWF
+						   );
+
+void SaveRhoToFile(FILE * fout, 
+				   double time, 
+				   double rho
+				   );
+
+
+void EvolveTime(const vector<vector<ComplexDouble> > & singleParticleTwiddleFactors, 
+				vector<vector<vector<ComplexDouble> > > & singleParticleWF
+				);
 
 #endif

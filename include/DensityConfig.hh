@@ -22,6 +22,7 @@ public:
   vector<string> KCurveParticle;
   vector<string> GLWeightsParticle;
   vector<string> EigendataParticle;
+  
   string EigendataTwoParticles;
 };
 
@@ -40,11 +41,13 @@ class OutputFiles
 {
 public:
   OutputFiles()
-	:TimeSeries(""), FullFunctions("")
+	:TimeSeries(""), FullFunctions(""), SingleParticle(2), SingleBasis(2)
   { }
 
   string TimeSeries;
   string FullFunctions;
+  vector<string> SingleParticle;
+  vector<int> SingleBasis;
 };
 
 class UnitSet

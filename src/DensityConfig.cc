@@ -87,6 +87,14 @@ void DensityConfig::InitOutputFiles(Setting & root)
 	throw RLException("Could not look up value for TimeSeries output file.");
   if( ! output.lookupValue("FullFunctions", myOutputFiles.FullFunctions) )
 	throw RLException("Could not look up value for FullFunctions output file.");
+  if( ! output.lookupValue("SingleA", myOutputFiles.SingleParticle.at(0)) )
+	throw RLException("Could not look up value for SingleA output file.");
+  if( ! output.lookupValue("SingleB", myOutputFiles.SingleParticle.at(1)) )
+	throw RLException("Could not look up value for SingleB output file.");
+  if( ! output.lookupValue("SingleABasis", myOutputFiles.SingleBasis.at(0)))
+	throw RLException("Could not look up value for SingleABasis output property.");
+  if( ! output.lookupValue("SingleBBasis", myOutputFiles.SingleBasis.at(1)))
+	throw RLException("Could not look up value for SingleBBasis output property.");
 }
 
 void DensityConfig::SizetLookup(const Setting & root, const char * propName, size_t & output)

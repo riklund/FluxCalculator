@@ -1,5 +1,10 @@
 #include "Density.hh"
 
+
+////////////
+//////////// Code controlling general starting and stopping the program.
+////////////
+
 int main(int argc, char *argv[])
 {
   CommandLineInterpreter * myInterpreter = InitInterpreter(); 
@@ -23,8 +28,7 @@ int main(int argc, char *argv[])
   string configFile = myInterpreter->ReadFlaggedCommandStrict("configFile").front().c_str();
 
   delete myInterpreter;
-
-
+  
   DensityConfig myConfiguration;
   
   ///If there is no config file, write it and exit. Otherwise, use it.
@@ -68,18 +72,147 @@ CommandLineInterpreter * InitInterpreter()
 }
 
 
+
+
+
+////////////
+//////////// Calculation code
+////////////
+
+
+
+
+
+
+
+
 void PerformCalculations(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
-{  
-  LoadIndata(myConfiguration, myPrinter);
-  FillUnits(myConfiguration, myPrinter);
-  Fill3DGrid(myConfiguration, myPrinter);
-  FillPsiSingleCache(myConfiguration, myPrinter);
-  FillPsiTwoCache(myConfiguration, myPrinter);
-  FillRhoT(myConfiguration, myPrinter);
-  SaveRhoTToFile(myConfiguration, myPrinter);
+{
+  vector<vector<vector<ComplexDouble> > > singleParticleWF(2);
+  vector<vector<ComplexDouble> > singleParticleTwiddleFactors(2);
+  vector<ComplexDouble> EigendataTwoParticle;
+  vector<vector<pair<double, double> > > xGLRules(2);
+
+  double timeStart, timeDelta;
+  size_t timeSteps;
+
+  {
+	//Basic stuff: curve and weights (needed for renormalization).
+	vector<vector<ComplexDouble> > KCurve(2);
+	vector<vector<ComplexDouble> > GLWeights(2);
+	
+	//first element in any eigendata is eigenvalue, rest is eigenvector.
+	//for each single particle (outermost vector), we have N eigenvectors (middle vector)
+	//containing N elements each. First element in innermost vector is eigenvalue, though.
+	vector<vector<vector<ComplexDouble> > > Eigendata(2);
+	LoadIndata(myConfiguration, myPrinter, KCurve, GLWeights, Eigendata, EigendataTwoParticle);
+	
+	InitXGLRules(myConfiguration.GetParticleDomain(), xGLRules);
+
+	timeStart = myConfiguration.GetTimeDomain().start;
+	double stop = myConfiguration.GetTimeDomain().stop;
+	timeSteps = myConfiguration.GetTimeDomain().precision;
+	timeDelta = (stop - timeStart) / timeSteps;
+
+	myPrinter.Print(3, "Initializing twiddle factors...");
+	FillSingleParticleTwiddle(Eigendata, timeDelta, myConfiguration.GetUnits().hbarTimesLambda, singleParticleTwiddleFactors);
+	myPrinter.Print(3, "done.\n");
+	myPrinter.Print(3, "Computing single-particle spatial wavefunctions...");	
+	FillSingleParticleSpatial(xGLRules, KCurve, GLWeights, Eigendata, singleParticleWF);
+	myPrinter.Print(3, "done.\n");
+
+  }
+
+  
+  myPrinter.Print(3, "Opening output files.\n");	
+  ManagedOutputFiles myFiles(myPrinter, myConfiguration.GetOutputFiles());
+  vector<vector<ComplexDouble> > twoParticleWF(xGLRules.at(0).size(), vector<ComplexDouble>(xGLRules.at(1).size()));
+  myPrinter.Print(3, "Done opening output files.\n");
+  
+  myPrinter.Print(3, "Starting time stepping with stepsize %5.2e.\n", timeDelta);
+
+  double twoParticleNorm = -1337;
+
+
+  for(size_t timeIndex = 0; timeIndex < timeSteps; ++timeIndex)
+	{
+	  double time = timeStart + timeDelta * timeIndex;
+	  myPrinter.Print(2, "Time is now %+5.2e, ( %d / %d steps ).\n", time, timeIndex, timeSteps);
+	  myPrinter.Print(5, "Saving single particle densities...");
+	  for(uint i = 0; i<2; ++i)
+		{
+		  size_t bState = myConfiguration.GetOutputFiles().SingleBasis.at(i);
+		  double oneRho = ComputeSingleParticleRho(xGLRules.at(i), singleParticleWF.at(i).at(bState));
+		  SaveRhoToFile(myFiles.SingleBasis.at(i), time, oneRho);
+		}
+	  myPrinter.Print(5, "done.\n");
+	  myPrinter.Print(5, "Creating two-particle wavefunction...");
+	  FillTwoParticleWF(singleParticleWF, EigendataTwoParticle, twoParticleWF);
+	  myPrinter.Print(5, "done.\n");
+	  myPrinter.Print(5, "Computing two-particle density and saving...");
+	  double twoRho = ComputeTwoParticleRho(xGLRules, twoParticleWF);
+	  if(twoParticleNorm > -100)
+		{
+		  twoRho /= twoParticleNorm;
+		}
+	  else
+		{
+		  twoParticleNorm = twoRho;
+		  twoRho = 1;
+		}
+	  SaveRhoToFile(myFiles.TimeSeries, time, twoRho);
+	  myPrinter.Print(5, "done.\n");
+
+	  myPrinter.Print(5, "Evolving time...");
+	  EvolveTime(singleParticleTwiddleFactors, singleParticleWF);
+	  myPrinter.Print(5, "done.\n");
+	}
 }
 
-void LoadIndata(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
+void EvolveTime(const vector<vector<ComplexDouble> > & singleParticleTwiddleFactors, vector<vector<vector<ComplexDouble> > > & singleParticleWF)
+{
+  ///Evolve time.
+  for(uint i = 0; i<2; ++i)
+	{
+#pragma omp parallel for
+	  for(size_t j = 0; j<singleParticleWF.at(i).size(); ++j)
+		{
+		  for(size_t x = 0; x<singleParticleWF.at(i).at(j).size(); ++x)
+			{
+			  singleParticleWF.at(i).at(j).at(x) *= singleParticleTwiddleFactors.at(i).at(j);
+			}
+		}
+	}  
+}
+
+
+void InitXGLRules(const vector<DomainSpecific> & particleDomain, vector<vector<pair<double, double> > > & xGLRules)
+{
+  for(uint i = 0; i<2; ++i)
+	{
+	  double start = particleDomain.at(i).start;
+	  double stop = particleDomain.at(i).stop;
+	  size_t precision = particleDomain.at(i).precision;
+	  xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
+	}
+}
+
+
+double ComputeSingleParticleRho(const vector<pair<double, double> > & xGLRule, const vector<ComplexDouble> & singleParticleWF)
+{
+  if(xGLRule.size() != singleParticleWF.size())
+	throw RLException("Size mismatch: xGLRule had size %d, singleParticleWF had size %d.", xGLRule.size(), singleParticleWF.size());
+
+  double density = 0;
+  for(size_t x = 0; x<xGLRule.size(); ++x)
+	{
+	  density += xGLRule.at(x).second * pow(abs(singleParticleWF.at(x)),2.0);
+	}
+  return density;
+}
+
+
+void LoadIndata(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter, vector<vector<ComplexDouble> > & KCurve, vector<vector<ComplexDouble> > & GLWeights, vector<vector<vector<ComplexDouble> > > &Eigendata, vector<ComplexDouble> & EigendataTwoParticle)
 {
   myPrinter.Print(2, "Loading input data.\n");
   for(uint i = 0; i<2; ++i)
@@ -130,12 +263,6 @@ void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<Comple
 }
 
 
-void FillUnits(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
-{
-  hbarTimesLambda = myConfiguration.GetUnits().hbarTimesLambda;
-  massOverLambda2 = myConfiguration.GetUnits().massOverLambda2;
-}
-
 void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<ComplexDouble> > & output)
 {
   myPrinter.Print(3,"Loading file '%s'...", fileName.c_str());
@@ -171,162 +298,135 @@ void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<Co
   myPrinter.Print(3,"done.\n");
 }
 
-void FillPsiTwoCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
-{
-  myPrinter.Print(3, "Filling PsiTwoCache...");
-  psiTwoCache.resize(xGLRules.at(0).size(), vector<vector<ComplexDouble> >(xGLRules.at(1).size(), vector<ComplexDouble>(tValues.size(), 0.0)));
 
-  for(size_t xa = 0; xa<xGLRules.at(0).size(); ++xa)
-	{
+void FillTwoParticleWF(const vector<vector<vector<ComplexDouble > > > & singleParticleWF, const vector<ComplexDouble> & EigendataTwoParticle, vector<vector<ComplexDouble> > & twoParticleWF)
+
+{
 #pragma omp parallel for
-	  for(size_t xb = 0; xb<xGLRules.at(1).size(); ++xb)
+  for(size_t xa = 0; xa<twoParticleWF.size(); ++xa)
+	{
+	  for(size_t xb = 0; xb<twoParticleWF.at(xa).size(); ++xb)
 		{
-		  for(size_t t = 0; t<tValues.size(); ++t)
-			{
-			  psiTwoCache.at(xa).at(xb).at(t) = PsiTwo(xa, xb, t);
-			}
+		  twoParticleWF.at(xa).at(xb) = TwoParticleWF(xa, xb, singleParticleWF, EigendataTwoParticle);
 		}
 	}
-  myPrinter.Print(3, "done.\n");
 }
 
-void Fill3DGrid(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
+ComplexDouble TwoParticleWF(size_t xa, size_t xb, const vector<vector<vector<ComplexDouble> > > & singleParticleWF, const vector<ComplexDouble> & EigendataTwoParticle)
 {
-  myPrinter.Print(3, "Filling 3D grid...");
-  #pragma omp parallel for
-  for(uint i = 0; i<2; ++i)
+  ComplexDouble toReturn = 0.0;
+  size_t N1 = singleParticleWF.at(0).size();
+  size_t N2 = singleParticleWF.at(1).size();
+  size_t Ntot = N1 * N2;
+  for(size_t i = 0; i<Ntot; ++i)
 	{
-	  double start = myConfiguration.GetParticleDomain().at(i).start;
-	  double stop = myConfiguration.GetParticleDomain().at(i).stop;
-	  size_t precision = myConfiguration.GetParticleDomain().at(i).precision;
-
-	  xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
+	  size_t a = i / N1;
+	  size_t b = i % N2;
+	  toReturn += EigendataTwoParticle.at(i+1) * singleParticleWF.at(0).at(a).at(xa) * singleParticleWF.at(1).at(b).at(xb);
 	}
-
-  double start = myConfiguration.GetTimeDomain().start;
-  double stop = myConfiguration.GetTimeDomain().stop;
-  size_t precision = myConfiguration.GetTimeDomain().precision;
-  tValues.resize(precision);
-  double delta = (stop - start) / precision;
-  #pragma omp parallel for
-  for(size_t i = 0; i<precision; ++i)
-	{
-	  tValues.at(i) = start + delta * i;
-	}
-  myPrinter.Print(3, "done.\n");
+  return toReturn;
 }
 
-void FillPsiSingleCache(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
+
+
+void FillSingleParticleSpatial(const vector<vector<pair<double, double> > > & xGLRules, const vector<vector<ComplexDouble> > & KCurve, const vector<vector<ComplexDouble> > & GLWeights, const vector<vector<vector<ComplexDouble> > > & Eigendata, vector<vector<vector<ComplexDouble> > > & singleParticleSpatialWF)
 {
-  myPrinter.Print(3, "Filling PsiSingleCache...");
-  psiSingleCache.resize(2);
+  singleParticleSpatialWF.resize(2);
   for(uint i = 0; i<2; ++i)
-	psiSingleCache.at(i).resize(xGLRules.at(i).size(), vector<vector<ComplexDouble> >(tValues.size(), vector<ComplexDouble>(Eigendata.at(i).size(), 0) ) );
+	{
+	  singleParticleSpatialWF.at(i).resize(Eigendata.at(i).size(), vector<ComplexDouble>(xGLRules.at(i).size(), 0.0));
+	}
   
   for(uint partIndex = 0; partIndex < 2; ++partIndex)
 	{
 #pragma omp parallel for
 	  for(size_t x = 0; x<xGLRules.at(partIndex).size(); ++x)
 		{
-		  for(size_t t = 0; t<tValues.size(); ++t)
+		  for(size_t eigIndex = 0; eigIndex < Eigendata.at(partIndex).size(); ++eigIndex)
 			{
-			  for(size_t eigIndex = 0; eigIndex < Eigendata.at(partIndex).size(); ++eigIndex)
-				{
-				  psiSingleCache.at(partIndex).at(x).at(t).at(eigIndex) = 
-					PsiSingle(partIndex, x, t, eigIndex);
-				}
+			  singleParticleSpatialWF.at(partIndex).at(eigIndex).at(x) = 
+				SingleParticleSpatial(KCurve.at(partIndex), 
+									  GLWeights.at(partIndex), 
+									  Eigendata.at(partIndex).at(eigIndex), 
+									  xGLRules.at(partIndex).at(x).first
+									  );
 			}
 		}
 	}
-  myPrinter.Print(3, "done\n");
 }
 
 
-ComplexDouble PsiSingle(uint partIndex, size_t x, size_t t, size_t eigIndex)
+ComplexDouble SingleParticleSpatial(const vector<ComplexDouble> & KCurve, const vector<ComplexDouble> GLWeights, const vector<ComplexDouble> & Eigendata, double x)
 {
   ComplexDouble toReturn = 0.0;
 
   vector<ComplexDouble (*)(const ComplexDouble&)> bfun(2);
   bfun.at(0) = &std::sin, bfun.at(1) = &std::cos;
 
-  ///sine functions.
-  for(size_t i = 0; i<KCurve.at(partIndex).size(); ++i)
+  size_t N = KCurve.size();
+
+  for(size_t i = 0; i<2*N; ++i)
 	{
-	  double XX = xGLRules.at(partIndex).at(x).first;
+
+	  size_t curvePointer = i % N;
+	  size_t basisPointer = i / N;
 
 	  toReturn += 
-		Eigendata.at(partIndex).at(eigIndex).at(i+1) *
-		sqrt(GLWeights.at(partIndex).at(i/2)) *
+		//coefficient
+		Eigendata.at(i+1) *
+		//spatial part
+		sqrt(GLWeights.at(curvePointer)) *
 		sqrt(1/PI) * 
-		bfun.at(i%2)(KCurve.at(partIndex).at(i/2) * XX) *
-		exp(ComplexDouble(0,-1.0)*KToE(KCurve.at(partIndex).at(i/2)) * 
-			tValues.at(t) / hbarTimesLambda);
+		bfun.at(basisPointer)(KCurve.at(curvePointer) * x);
 	}
-  return toReturn;
-}
 
-ComplexDouble KToE(ComplexDouble k)
-{
-  return pow(hbarTimesLambda*k,2)/(2*massOverLambda2);
-}
-
-ComplexDouble PsiTwo(size_t xa, size_t xb, size_t t)
-{
-  ComplexDouble toReturn = 0.0;
-  size_t N1 = KCurve.at(0).size();
-  size_t N2 = KCurve.at(1).size();
-  size_t Ntot = N1 * N2;
-  for(size_t i = 0; i<Ntot; ++i)
-	{
-	  size_t a = i / N1;
-	  size_t b = i % N2;
-	  toReturn += EigendataTwoParticle[i] * psiSingleCache[0][xa][t][a] * psiSingleCache[1][xb][t][b];
-	}
   return toReturn;
 }
 
 
-
-void FillRhoT(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
+void FillSingleParticleTwiddle(const vector<vector<vector<ComplexDouble> > > & Eigendata, const double timestep, const double hbar, vector<vector<ComplexDouble> > & singleParticleTwiddleFactors)
 {
-  myPrinter.Print(3, "Filling RhoT...");
-  rhoT.resize(tValues.size(), 0.0);
-  for(size_t t = 0; t<tValues.size(); ++t)
+  for(uint partIndex = 0; partIndex<2; ++partIndex)
 	{
-	  for(size_t xa = 0; xa < xGLRules.at(0).size(); ++xa)
+	  singleParticleTwiddleFactors.at(partIndex).resize(Eigendata.at(partIndex).size(), 0.0);
+	  for(size_t i = 0; i<Eigendata.at(partIndex).size(); ++i)
 		{
-		  for(size_t xb = 0; xb < xGLRules.at(1).size(); ++xb)
-			{
-			  rhoT.at(t) += 
-				xGLRules.at(0).at(xa).second * 
-				xGLRules.at(1).at(xb).second *
-				pow(abs(psiTwoCache.at(xa).at(xb).at(t)), 2);
-			}
+		  singleParticleTwiddleFactors.at(partIndex).at(i) = 
+			PsiSingleTwiddle(Eigendata.at(partIndex).at(i).at(0), timestep, hbar);
 		}
 	}
-  myPrinter.Print(3, "done.\n");
 }
 
 
-
-void SaveRhoTToFile(const DensityConfig & myConfiguration, VerbosePrinter & myPrinter)
+ComplexDouble PsiSingleTwiddle(ComplexDouble eigenvalue, double timestep, double hbar)
 {
-  string fileName = myConfiguration.GetOutputFiles().TimeSeries;
-  if(fileName.empty())
+  ComplexDouble toReturn = exp(ComplexDouble(0,-1.0)*
+				  eigenvalue *
+				  timestep / hbar);
+  return toReturn;
+}
+
+double ComputeTwoParticleRho(const vector<vector<pair<double, double> > > & xGLRules, const vector<vector<ComplexDouble> > twoParticleWF)
+{
+  double rho = 0;
+  for(size_t xa = 0; xa < xGLRules.at(0).size(); ++xa)
 	{
-	  myPrinter.Print(3, "Empty RhoT filename, not saving.");
-	  return;
+	  for(size_t xb = 0; xb < xGLRules.at(1).size(); ++xb)
+		{
+		  rho += 
+			xGLRules.at(0).at(xa).second * 
+			xGLRules.at(1).at(xb).second *
+			pow(abs(twoParticleWF.at(xa).at(xb)), 2);
+		}
 	}
-  myPrinter.Print(3, "Saving RhoT to file...");
-  FILE * fout = fopen(fileName.c_str(), "w");
-  if(fout == NULL)
+  return rho;
+}
+
+void SaveRhoToFile(FILE * fout, double time, double rho)
+{
+  if(fout)
 	{
-	  throw RLException("Could not open output file '%s'.", fileName.c_str());
+	  fprintf(fout, "%+13.10e %+13.10e\n", time, rho);
+	  fflush(fout);
 	}
-  for(size_t i = 0; i < rhoT.size(); ++i)
-	{
-	  fprintf(fout, "%+13.10e %+13.10e\n", tValues.at(i), rhoT.at(i));
-	}
-  fclose(fout);
-  myPrinter.Print(3, "done.\n");
 }

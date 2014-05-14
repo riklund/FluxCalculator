@@ -131,8 +131,6 @@ void PerformCalculations(const DensityConfig & myConfiguration, VerbosePrinter &
   
   myPrinter.Print(3, "Starting time stepping with stepsize %5.2e.\n", timeDelta);
 
-  double twoParticleNorm = -1337;
-
 
   for(size_t timeIndex = 0; timeIndex < timeSteps; ++timeIndex)
 	{
@@ -151,15 +149,6 @@ void PerformCalculations(const DensityConfig & myConfiguration, VerbosePrinter &
 	  myPrinter.Print(5, "done.\n");
 	  myPrinter.Print(5, "Computing two-particle density and saving...");
 	  double twoRho = ComputeTwoParticleRho(xGLRules, twoParticleWF);
-	  if(twoParticleNorm > -100)
-		{
-		  twoRho /= twoParticleNorm;
-		}
-	  else
-		{
-		  twoParticleNorm = twoRho;
-		  twoRho = 1;
-		}
 	  SaveRhoToFile(myFiles.TimeSeries, time, twoRho);
 	  myPrinter.Print(5, "done.\n");
 
@@ -171,7 +160,7 @@ void PerformCalculations(const DensityConfig & myConfiguration, VerbosePrinter &
 
 void EvolveTime(const vector<vector<ComplexDouble> > & singleParticleTwiddleFactors, vector<vector<vector<ComplexDouble> > > & singleParticleWF)
 {
-  ///Evolve time.
+///Evolve time.
   for(uint i = 0; i<2; ++i)
 	{
 #pragma omp parallel for
@@ -389,7 +378,7 @@ void FillSingleParticleTwiddle(const vector<vector<vector<ComplexDouble> > > & E
   for(uint partIndex = 0; partIndex<2; ++partIndex)
 	{
 	  singleParticleTwiddleFactors.at(partIndex).resize(Eigendata.at(partIndex).size(), 0.0);
-	  for(size_t i = 0; i<Eigendata.at(partIndex).size(); ++i)
+	  for(size_t i = 1; i<Eigendata.at(partIndex).size(); ++i)
 		{
 		  singleParticleTwiddleFactors.at(partIndex).at(i) = 
 			PsiSingleTwiddle(Eigendata.at(partIndex).at(i).at(0), timestep, hbar);

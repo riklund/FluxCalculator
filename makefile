@@ -24,9 +24,9 @@ SRC:= $(wildcard src/*.cc)
 OBJ:= $(SRC:src/%.cc=bin/%.o) 
 
 
-MAINS := Density
+MAINS := Flux
 MAINSOBJ:= $(MAINS:%=bin/%.o)
-MAINSNAME := Density
+MAINSNAME := Flux
 
 
 

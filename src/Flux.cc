@@ -120,7 +120,7 @@ void PerformCalculations(const FluxConfig & myConfiguration, VerbosePrinter & my
   FillTwoParticleWF(singleParticleWF, EigendataTwoParticle, twoParticleWF);
   myPrinter.Print(3, "done.\n");
   myPrinter.Print(3, "Creating two-particle wavefunction derivative...");
-  vector<vector<pair<ComplexDouble, ComplexDouble> > > twoParticleWFGrad(xGLRules.at(0).size(), vector<ComplexDouble>(xGLRules.at(1).size(), 0.0));
+  vector<vector<pair<ComplexDouble, ComplexDouble> > > twoParticleWFGrad(xGLRules.at(0).size(), vector<pair<ComplexDouble, ComplexDouble> >(xGLRules.at(1).size(), make_pair(0.0, 0.0)));
   FillTwoParticleWFGrad(singleParticleWF, singleParticleWFPrime, EigendataTwoParticle, twoParticleWFGrad);
   myPrinter.Print(3, "done.\n");
 
@@ -142,71 +142,48 @@ void PerformCalculations(const FluxConfig & myConfiguration, VerbosePrinter & my
 
   SaveTwoParticleDensity(xGLRules, twoParticleWF, myConfiguration.GetOutputDensityFile());
 
-  
-
-  /*
-  ///Now compute flux.
-  ///Trick: create fake xGLRules.
-  vector<vector<pair<double, double> > > myFakexGLRule(2, vector<pair<double, double> >(1, pair<double, double>()));
-  for(size_t i = 0; i<2; ++i)
-	myFakexGLRule.at(i).at(0).first = myConfiguration.GetParticleDomain().at(i).stop;
-
-  vector<vector<vector<ComplexDouble> > > singleParticleLastPoint;
-  vector<vector<vector<ComplexDouble> > > singleParticleLastPointDiff;
-  FillSingleParticleSpatial(myFakexGLRule, KCurve, GLWeights, Eigendata, singleParticleLastPoint);
-  FillSingleParticleSpatial(myFakexGLRule, KCurve, GLWeights, Eigendata, singleParticleLastPointDiff, true);
-  
-  */
-  /*
-  FILE * gr = fopen("grid.dat", "w");
-  FILE * grD = fopen("gridD.dat", "w");
-  FILE * grI = fopen("gridI.dat", "w");
-  FILE * grDI = fopen("gridDI.dat", "w");
-
-  for(double x = -5; x<20; x+=0.1)
-	{
-	  cout << x << endl;
-	  for(double y = -5; y<20; y+=0.1)
-		{
-		  vector<vector<pair<double, double> > > myFakexGLRule1(2, vector<pair<double, double> >(1, pair<double, double>()));
-		  myFakexGLRule1.at(0).at(0).first = x;
-		  myFakexGLRule1.at(1).at(0).first = y;
-		  vector<vector<vector<ComplexDouble> > > singleParticleLastPoint1;
-		  vector<vector<vector<ComplexDouble> > > singleParticleLastPointDiff1;
-		  FillSingleParticleSpatial(myFakexGLRule1, KCurve, GLWeights, Eigendata, singleParticleLastPoint1);
-		  FillSingleParticleSpatial(myFakexGLRule1, KCurve, GLWeights, Eigendata, singleParticleLastPointDiff1, true);
-		  
-		  ComplexDouble wfw = TwoParticleWF(0, 0, singleParticleLastPoint1, EigendataTwoParticle);
-		  pair<ComplexDouble, ComplexDouble> val = TwoParticleWFGrad(0, 0, singleParticleLastPoint1, singleParticleLastPointDiff1, EigendataTwoParticle);
-		  fprintf(gr, "%+13.10e ", real(wfw));
-		  fprintf(grD, "%13.10e ", real(val.first));
-		  fprintf(grI, "%+13.10e ", imag(wfw));
-		  fprintf(grDI, "%13.10e ", imag(val.first));
-		}
-	  fprintf(gr, "\n");
-	  fprintf(grD, "\n");
-	  fprintf(grI, "\n");
-	  fprintf(grDI, "\n");
-	}
-  fclose(gr);
-  fclose(grD);
-  fclose(grI);
-  fclose(grDI);
-  return;
-  */
-
-  ComplexDouble twoWF = TwoParticleWF(0, 0, singleParticleLastPoint, EigendataTwoParticle);
-
-  pair<ComplexDouble, ComplexDouble> twoWFPrime = TwoParticleWFGrad(0, 0, singleParticleLastPoint, singleParticleLastPointDiff, EigendataTwoParticle);
-
-
-  pair<ComplexDouble, ComplexDouble> nom = (twoWFPrime * conj(twoWF)) - (conj(twoWFPrime) * twoWF);
-
   ComplexDouble preFact = myConfiguration.GetUnits().hbarTimesLambda/
 	(2.0*ComplexDouble(0, 1) * myConfiguration.GetUnits().massOverLambda2);
   
+																		 
+  pair<ComplexDouble, ComplexDouble> twoWFPrime = make_pair(0.0, 0.0);
 
-  pair<ComplexDouble, ComplexDouble> flux = nom * (preFact / twoRho) ;
+  FILE * fluxfile = fopen(myConfiguration.GetOutputFluxFile().c_str(), "w");
+  for(size_t i = 0; i<xGLRules.at(0).size(); ++i)
+	{
+	  for(size_t j = 0; j<xGLRules.at(1).size(); ++j)
+		{
+
+		  ComplexDouble WF = twoParticleWF.at(i).at(j);
+		  pair<ComplexDouble, ComplexDouble> WFgrad= twoParticleWFGrad.at(i).at(j);
+
+		  pair<ComplexDouble, ComplexDouble> nom = (WFgrad * conj(WF)) - (conj(WFgrad) * WF);
+		  
+		  pair<ComplexDouble, ComplexDouble> localFlux = nom * (preFact / twoRho);
+		  if( abs(imag(localFlux.first)) > 1E-9 || abs(imag(localFlux.second)))
+			throw RLException("Flux with large imaginary part detected.");
+		  if(fluxfile)
+			fprintf(fluxfile, "%13.10e %13.10e %13.10e %13.10e\n", xGLRules.at(0).at(i).first, xGLRules.at(1).at(j).first, real(localFlux.first), real(localFlux.second));
+
+		  
+		  if(j==xGLRules.at(1).size() - 1)
+			{
+			  twoWFPrime.first += xGLRules.at(0).at(i).second * nom.first;
+			}
+
+		  if(i==xGLRules.at(0).size() - 1)
+			{
+			  twoWFPrime.second += xGLRules.at(0).at(j).second * nom.second;
+			}
+		}
+		  if(fluxfile)
+			fprintf(fluxfile, "\n");
+	}
+  if(fluxfile)
+	fclose(fluxfile);
+
+
+  pair<ComplexDouble, ComplexDouble> flux = twoWFPrime * (preFact / twoRho);
   
 
 
@@ -223,7 +200,7 @@ void PerformCalculations(const FluxConfig & myConfiguration, VerbosePrinter & my
   cout << endl;
   cout << "Normalization factor: " << twoRho << endl;
   cout << "Pre-factor: " << preFact << endl;
-  cout << "Nominator: " << nom.first << " " << nom.second << endl;
+  cout << "Nominator: " << twoWFPrime.first << " " << twoWFPrime.second << endl;
   cout << "Position: ";
   for(size_t i = 0; i<2; ++i)
 	cout << "p_" << i << " = " << myConfiguration.GetParticleDomain().at(i).stop << " ";
@@ -311,7 +288,7 @@ void LoadIndata(const FluxConfig & myConfiguration, VerbosePrinter & myPrinter, 
   if(KCurve[0].size() * 2 != Eigendata[0].size())
 	throw RLException("Unexpected difference between eigendata (%d) and KCurve (%d) size.", Eigendata[0].size(), KCurve[0].size());
   if(KCurve[0].size() != GLWeights[0].size())
-	throw RLException("Unexpected difference between KCurve and GLWeights size.");
+	throw RLException("Unexpected difference between KCurve (%d) and GLWeights (%d) size.", KCurve[0].size(), GLWeights[0].size());
   if((Eigendata[0].size())*(Eigendata[1].size()) != EigendataTwoParticle.size()-1)
 	throw RLException("Size mismatch: single particle %d, two-particle %d", Eigendata[0].size(), EigendataTwoParticle.size());
 
@@ -324,6 +301,8 @@ void LoadFileToVector(string fileName, VerbosePrinter & myPrinter, vector<Comple
 
   output.clear();
   ifstream fin(fileName.c_str(), fstream::in);
+  if(!fin.good())
+	throw RLException("Could not open file '%s'.\n", fileName.c_str());
   double re, im;
   while(fin >> re >> im)
 	{
@@ -362,7 +341,7 @@ void LoadEigenInfo(string fileName, VerbosePrinter & myPrinter, vector<vector<Co
 	{
 	  if(output.at(i).size() != output.at(i-1).size())
 		{
-		  throw RLException("Read dimension mismatch.");
+		  throw RLException("Read dimension mismatch: %d (line %d) vs %d (line %d). ", output.at(i).size(), i, output.at(i-1).size(), i-1);
 		}
 	}
   
@@ -383,13 +362,13 @@ void FillTwoParticleWF(const vector<vector<vector<ComplexDouble > > > & singlePa
 	}
 }
 
-void FillTwoParticleWFGrad(const vector<vector<vector<ComplexDouble > > > & singleParticleWF, const vector<ComplexDouble> & singleParticleWFPrime, const vector<ComplexDouble> & EigendataTwoParticle, vector<vector<ComplexDouble> > & twoParticleWFGrad)
+ void FillTwoParticleWFGrad(const vector<vector<vector<ComplexDouble > > > & singleParticleWF, const vector<vector<vector<ComplexDouble> > > & singleParticleWFPrime, const vector<ComplexDouble> & EigendataTwoParticle, vector<vector<pair<ComplexDouble, ComplexDouble> > > & twoParticleWFGrad)
 
 {
 #pragma omp parallel for
-  for(size_t xa = 0; xa<twoParticleWF.size(); ++xa)
+  for(size_t xa = 0; xa<twoParticleWFGrad.size(); ++xa)
 	{
-	  for(size_t xb = 0; xb<twoParticleWF.at(xa).size(); ++xb)
+	  for(size_t xb = 0; xb<twoParticleWFGrad.at(xa).size(); ++xb)
 		{
 		  twoParticleWFGrad.at(xa).at(xb) = TwoParticleWFGrad(xa, xb, singleParticleWF, singleParticleWFPrime, EigendataTwoParticle);
 		}

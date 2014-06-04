@@ -5,3 +5,8 @@ output/*
 Density
 multiConfig/*
 multiOut/*
+*.mkv
+*_tmp*
+histograms*
+bin/*
+Flux

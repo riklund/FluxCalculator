@@ -20,7 +20,7 @@ MAINS:= RunTests
 MAINSOBJ:= $(MAINS:%=bin/%.o)
 
 #List all binaries in the main project which contains main() methods (these cannot be tested).
-NON_TESTABLE_BIN:= ../bin/Density.o
+NON_TESTABLE_BIN:= ../bin/Flux.o
 
 TESTABLE_BIN:= $(filter-out $(NON_TESTABLE_BIN), $(wildcard ../bin/*.o))
 

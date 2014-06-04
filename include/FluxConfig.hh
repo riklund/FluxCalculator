@@ -37,19 +37,6 @@ public:
   size_t precision;
 };
 
-class OutputFiles
-{
-public:
-  OutputFiles()
-	:TimeSeries(""), FullFunctions(""), SingleParticle(2), SingleBasis(2)
-  { }
-
-  string TimeSeries;
-  string FullFunctions;
-  vector<string> SingleParticle;
-  vector<int> SingleBasis;
-};
-
 class UnitSet
 {
 public:
@@ -60,13 +47,13 @@ public:
   double massOverLambda2;
 };
 
-class DensityConfig
+class FluxConfig
 {
 public:
-  DensityConfig();
-  DensityConfig(const char * fileName
+  FluxConfig();
+  FluxConfig(const char * fileName
 				);
-  ~DensityConfig();
+  ~FluxConfig();
   void ReadFile(const char * fileName
 				);
 
@@ -75,17 +62,19 @@ public:
   uint GetVerbosityLevel() const;
   uint GetNumberOfThreads() const;
   const InputFiles & GetInputFiles() const;
-  const OutputFiles & GetOutputFiles() const;
   const vector<DomainSpecific> & GetParticleDomain() const;
-  const DomainSpecific & GetTimeDomain() const;
   const UnitSet & GetUnits() const;
+  const vector<size_t> & GetSingleParticleBasisNumber() const;
+
+  const string & GetOutputDensityFile() const;
+  const string & GetOutputFluxFile() const;
 
 protected:
   void InitProgramGenerals(Setting & root);
-  void InitOutputFiles(Setting & root);
   void InitInputFiles(Setting & root);
   void InitDomainSpecifics(Setting & root);
   void InitUnits(Setting & root);
+  void InitSingleParticleBasisNumber(Setting & root);
 
   static void SizetLookup(const Setting & root, const char * propName, size_t & output);
 
@@ -94,11 +83,13 @@ private:
   uint numberOfThreads;
   
   InputFiles myInputFiles;
-  OutputFiles myOutputFiles;
 
+  vector<size_t> mySingleParticleBasisNumber;
   vector<DomainSpecific> particleDomain;
-  DomainSpecific timeDomain;
-  
+
+  string outputDensity;
+  string outputFlux;
+
   UnitSet myUnits;
 };
 

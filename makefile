@@ -24,9 +24,8 @@ SRC:= $(wildcard src/*.cc)
 OBJ:= $(SRC:src/%.cc=bin/%.o) 
 
 
-MAINS := Flux
+MAINS := Flux Arc
 MAINSOBJ:= $(MAINS:%=bin/%.o)
-MAINSNAME := Flux
 
 
 
@@ -40,7 +39,7 @@ bin:
 
 $(MAINS): %: $(filter-out $(MAINSOBJ), $(OBJ)) bin/%.o
 	@echo Compiling $@...
-	@$(CC) $(CCFLAGS) $(INCLUDE) $^ $(LIBS)  -o $(MAINSNAME)
+	@$(CC) $(CCFLAGS) $(INCLUDE) $^ $(LIBS)  -o $@
 
 $(OBJ): bin/%.o: src/%.cc include/%.hh $(GLOBALDEPEND)
 	@echo Compiling $@...

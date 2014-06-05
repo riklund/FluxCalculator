@@ -69,6 +69,8 @@ public:
   const string & GetOutputDensityFile() const;
   const string & GetOutputFluxFile() const;
 
+  const bool GetUseLegendreRule() const;
+
 protected:
   void InitProgramGenerals(Setting & root);
   void InitInputFiles(Setting & root);
@@ -91,6 +93,8 @@ private:
   string outputFlux;
 
   UnitSet myUnits;
+
+  bool useLegendreRule;
 };
 
 #endif

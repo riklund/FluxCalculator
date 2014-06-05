@@ -121,6 +121,9 @@ void FluxConfig::InitDomainSpecifics(Setting & root)
   if( ! dspec.exists("ParticleBNormInt") || ! dspec["ParticleBNormInt"].isGroup())
 	throw RLException("Could not look up ParticleBNormInt.");
   Setting &partB = dspec["ParticleBNormInt"];
+
+  if( ! dspec.lookupValue("LegendreRule", useLegendreRule) )
+	throw RLException("Could not look up UseLegendreRule.");
   
   
   if(! partA.lookupValue("Start", particleDomain.at(0).start) )
@@ -193,4 +196,9 @@ const string & FluxConfig::GetOutputDensityFile() const
 const string & FluxConfig::GetOutputFluxFile() const
 {
   return outputFlux;
+}
+
+const bool FluxConfig::GetUseLegendreRule() const
+{
+  return useLegendreRule;
 }

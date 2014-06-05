@@ -10,3 +10,5 @@ multiOut/*
 histograms*
 bin/*
 Flux
+Arc
+ARC_HIST

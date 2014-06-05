@@ -41,8 +41,11 @@ void PerformCalculations(const FluxConfig & myConfiguration,
 						 );
 
 void InitXGLRules(const vector<DomainSpecific> & particleDomain, 
-				  vector<vector<pair<double, double> > > & xGLRules
+				  vector<vector<pair<double, double> > > & xGLRules,
+				  bool useGLRule
 				  );
+
+vector<pair<double, double> > GetNormalRule(size_t precision, double start, double stop);
 
 double ComputeSingleParticleRho(const vector<pair<double, double> > & xGLRule, 
 								const vector<ComplexDouble> & singleParticleWF

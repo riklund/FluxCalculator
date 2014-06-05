@@ -9,7 +9,7 @@ OBJ:= $(SRC:src/%.cc=bin/%.o)
 
 CCFLAGS:=  -pthread -Wall -fPIC -O3
 
-INCLUDE := -Iinclude -I../include 
+INCLUDE := -Iinclude -I../include -I../RLlib/include
 #Add extra include directives here.
 INCLUDE += 
 
@@ -20,7 +20,7 @@ MAINS:= RunTests
 MAINSOBJ:= $(MAINS:%=bin/%.o)
 
 #List all binaries in the main project which contains main() methods (these cannot be tested).
-NON_TESTABLE_BIN:= ../bin/Flux.o
+NON_TESTABLE_BIN:= ../bin/Flux.o ../bin/Arc.o
 
 TESTABLE_BIN:= $(filter-out $(NON_TESTABLE_BIN), $(wildcard ../bin/*.o))
 

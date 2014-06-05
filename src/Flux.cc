@@ -104,7 +104,7 @@ void PerformCalculations(const FluxConfig & myConfiguration, VerbosePrinter & my
   vector<vector<vector<ComplexDouble> > > Eigendata(2);
   LoadIndata(myConfiguration, myPrinter, KCurve, GLWeights, Eigendata, EigendataTwoParticle);
   
-  InitXGLRules(myConfiguration.GetParticleDomain(), xGLRules);
+  InitXGLRules(myConfiguration.GetParticleDomain(), xGLRules, myConfiguration.GetUseLegendreRule());
   
   myPrinter.Print(3, "Computing single-particle spatial wavefunctions...");	
   FillSingleParticleSpatial(xGLRules, KCurve, GLWeights, Eigendata, singleParticleWF, false);
@@ -234,15 +234,36 @@ void SaveTwoParticleDensity(const vector<vector<pair<double, double> > > & xGLRu
 }
 
 
-void InitXGLRules(const vector<DomainSpecific> & particleDomain, vector<vector<pair<double, double> > > & xGLRules)
+void InitXGLRules(const vector<DomainSpecific> & particleDomain, vector<vector<pair<double, double> > > & xGLRules, bool useGLRule)
 {
   for(uint i = 0; i<2; ++i)
 	{
 	  double start = particleDomain.at(i).start;
 	  double stop = particleDomain.at(i).stop;
 	  size_t precision = particleDomain.at(i).precision;
-	  xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
+	  if(useGLRule)
+		xGLRules.at(i) = LegendreRule::GetRule(precision, start, stop);
+	  else
+		{
+		  xGLRules.at(i) = GetNormalRule(precision, start, stop);
+		}
 	}
+}
+
+vector<pair<double, double> > GetNormalRule(size_t precision, double start, double stop)
+{
+  vector<pair<double, double> > toReturn(precision + 1, pair<double, double>());
+  double delta = (stop - start) / (precision);
+  for(size_t i = 0; i<precision + 1; ++i)
+	{
+	  toReturn.at(i) = make_pair(start + delta * i, delta);
+	  
+	  if(i==0 || i==precision)
+		{
+		  toReturn.at(i).second /= 2;
+		}
+	}
+  return toReturn;
 }
 
 

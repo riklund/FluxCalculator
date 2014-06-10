@@ -17,9 +17,9 @@ do
 	echo $oname
 	if [ $# -eq 2 ]
 	then
-		./histogram.p $1/$file > $2/${oname}.png
+		scripts/./histogram.p $1/$file > $2/${oname}.png
 	else
-		./fluxHisto.p $1/$file > $2/${oname}.png
+		scripts/./fluxHisto.p $1/$file > $2/${oname}.png
 	fi
 done
 

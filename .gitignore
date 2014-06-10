@@ -12,3 +12,10 @@ bin/*
 Flux
 Arc
 ARC_HIST
+arc_full
+arc_out
+flux_v2
+hist_v2
+*.pdf
+test/bin/*
+*.dat

@@ -3,9 +3,10 @@
 A program used to calculate stationary particle probability fluxes for two particles out of a trap. 
 
 
-[![Density Illustration](fig/Density.jpg?raw=true)](http://youtu.be/8-T_wye8C2g)
+[![Density Illustration](images/Density.jpg?raw=true)](http://youtu.be/8-T_wye8C2g)
 
-[![Flux Illustration](fig/Flux.jpg?raw=true)](http://youtu.be/nI2OsUOAQ18)
+
+[![Flux Illustration](images/Flux.jpg?raw=true)](http://youtu.be/nI2OsUOAQ18)
 
 
 

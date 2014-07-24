@@ -1,7 +1,7 @@
 #!/bin/bash
 
 
-dir="/net/data1/riklund/flux_output/nmax30states30contour0/"
+dir="/net/data1/riklund/flux_output/nmax30states30contour0dist40.0"
 
 if [ $# -ne 1 ]
 then

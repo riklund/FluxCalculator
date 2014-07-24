@@ -1,4 +1,10 @@
 #!/bin/bash
+if [ $# -ne 1 ]
+then
+	echo "Usage: $0 res-file"
+	exit 1
+fi
+
 cat $1 | \
 grep '^[-0-9\.e]\|Total flux:' | \
 grep -v 2VF | \
